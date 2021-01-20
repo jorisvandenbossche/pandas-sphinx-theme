@@ -35,8 +35,17 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
         nav_object : HTML string (if kind in ["navbar", "sidebar"]) or BeautifulSoup
                      object (if kind == "raw")
         """
-        toc_sphinx = context["toctree"](**kwargs)
-        soup = bs(toc_sphinx, "html.parser")
+        if kind == "navbar":
+            toc_sphinx = context["toctree"](**kwargs)
+            soup = bs(toc_sphinx, "html.parser")
+            toctree = soup
+        else:
+            # Grab the raw toctree object and structure it so we can manipulate it
+            toc_sphinx = context["toctree"](
+                maxdepth=-1, collapse=False, titles_only=True, includehidden=True
+            )
+            soup = bs(toc_sphinx, "html.parser")
+            toctree = soup
 
         # pair "current" with "active" since that's what we use w/ bootstrap
         for li in soup("li", {"class": "current"}):
@@ -48,24 +57,79 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
                 li["class"].append("nav-item")
                 li.find("a")["class"].append("nav-link")
             out = "\n".join([ii.prettify() for ii in soup.find_all("li")])
+            return out
 
-        elif kind == "sidebar":
-            # Remove sidebar links to sub-headers on the page
-            for li in soup.select("li.current ul li"):
-                # Remove
-                if li.find("a"):
-                    href = li.find("a")["href"]
-                    if "#" in href and href != "#":
-                        li.decompose()
+        # get level specified in conf
+        # navbar_level = int(context["theme_show_navbar_depth"])
+        navbar_level = 1
 
-            # Join all the top-level `li`s together for display
-            current_lis = soup.select("li.current.toctree-l1 li.toctree-l2")
-            out = "\n".join([ii.prettify() for ii in current_lis])
+        # function to open/close list and add icon
+        def collapse_list(li, ul, level):
+            if ul:
+                li.attrs["class"] = li.attrs.get("class", []) + ["collapsible-parent"]
+                if level <= 0:
+                    ul.attrs["class"] = ul.attrs.get("class", []) + ["collapse-ul"]
+                    li.append(
+                        toctree.new_tag(
+                            "i", attrs={"class": ["fas", "fa-chevron-down"]}
+                        )
+                    )
+                else:
+                    # Icon won't show up unless captions are collapsed
+                    if not li.name == "p" and "caption" not in li["class"]:
+                        li.append(
+                            toctree.new_tag(
+                                "i", attrs={"class": ["fas", "fa-chevron-up"]}
+                            )
+                        )
 
-        elif kind == "raw":
-            out = soup
+        # for top-level caption's collapse functionality
+        for para in toctree("p", attrs={"class": ["caption"]}):
+            ul = para.find_next_sibling()
+            collapse_list(para, ul, navbar_level)
 
-        return out
+        # iterate through all the lists in the sideabar and open/close
+        def iterate_toc_li(li, level):
+            if hasattr(li, "name") and li.name == "li":
+                ul = li.find("ul")
+                collapse_list(li, ul, level)
+            if isinstance(li, list) or hasattr(li, "name"):
+                for entry in li:
+                    if isinstance(entry, str):
+                        continue
+                    if hasattr(entry, "name"):
+                        if entry.name == "li":
+                            iterate_toc_li(entry, level - 1)
+                        else:
+                            iterate_toc_li(entry, level)
+            return
+
+        iterate_toc_li(toctree, navbar_level)
+
+        # Add bootstrap classes for first `ul` items
+        for ul in toctree("ul", recursive=False):
+            ul.attrs["class"] = ul.attrs.get("class", []) + ["nav", "sidenav_l1"]
+
+        return toctree.prettify()
+
+
+        # elif kind == "sidebar":
+        #     # Remove sidebar links to sub-headers on the page
+        #     for li in soup.select("li.current ul li"):
+        #         # Remove
+        #         if li.find("a"):
+        #             href = li.find("a")["href"]
+        #             if "#" in href and href != "#":
+        #                 li.decompose()
+
+        #     # Join all the top-level `li`s together for display
+        #     current_lis = soup.select("li.current.toctree-l1 li.toctree-l2")
+        #     out = "\n".join([ii.prettify() for ii in current_lis])
+
+        # elif kind == "raw":
+        #     out = soup
+
+        # return out
 
     def get_page_toc_object(kind="html"):
         """Return the within-page TOC links in HTML."""
@@ -202,6 +266,7 @@ def setup(app):
     app.set_translator("readthedocsdirhtml", BootstrapHTML5Translator, override=True)
     app.connect("html-page-context", setup_edit_url)
     app.connect("html-page-context", add_toctree_functions)
+    app.add_js_file("sphinx-book-theme.js")
 
     # Update templates for sidebar
     pkgdir = os.path.abspath(os.path.dirname(__file__))
