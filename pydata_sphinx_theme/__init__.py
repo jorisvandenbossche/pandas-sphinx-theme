@@ -11,6 +11,17 @@ from .bootstrap_html_translator import BootstrapHTML5Translator
 __version__ = "0.4.2dev0"
 
 
+def _get_navigation_expand_image(soup):
+    retval = soup.new_tag("i", attrs={"class": "icon"})
+
+    svg_element = soup.new_tag("svg")
+    svg_use_element = soup.new_tag("use", href="#svg-arrow-right")
+    svg_element.append(svg_use_element)
+
+    retval.append(svg_element)
+    return retval
+
+
 def add_toctree_functions(app, pagename, templatename, context, doctree):
     """Add functions so Jinja templates can add toctree objects."""
 
@@ -47,25 +58,78 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
             for li in soup("li"):
                 li["class"].append("nav-item")
                 li.find("a")["class"].append("nav-link")
-            out = "\n".join([ii.prettify() for ii in soup.find_all("li")])
+            return "\n".join([ii.prettify() for ii in soup.find_all("li")])
 
-        elif kind == "sidebar":
-            # Remove sidebar links to sub-headers on the page
-            for li in soup.select("li.current ul li"):
-                # Remove
-                if li.find("a"):
-                    href = li.find("a")["href"]
-                    if "#" in href and href != "#":
-                        li.decompose()
+        soup2 = soup.select("li.current.toctree-l1 ul")
+        if not soup2:
+            return ""
 
-            # Join all the top-level `li`s together for display
-            current_lis = soup.select("li.current.toctree-l1 li.toctree-l2")
-            out = "\n".join([ii.prettify() for ii in current_lis])
+        soup = bs(str(soup2[0]), "html.parser")
 
-        elif kind == "raw":
-            out = soup
+        toctree_checkbox_count = 0
+        last_element_with_current = None
+        for element in soup.find_all("li", recursive=True):
+            # We check all "li" elements, to add a "current-page" to the correct li.
+            classes = element.get("class", [])
+            if "current" in classes:
+                last_element_with_current = element
 
-        return out
+            # Nothing more to do, unless this has "children"
+            if not element.find("ul"):
+                continue
+
+            # Add a class to indicate that this has children.
+            element["class"] = classes + ["has-children"]
+
+            # We're gonna add a checkbox.
+            toctree_checkbox_count += 1
+            checkbox_name = f"toctree-checkbox-{toctree_checkbox_count}"
+
+            # Add the "label" for the checkbox which will get filled.
+            if soup.new_tag is None:
+                continue
+            label = soup.new_tag("label", attrs={"for": checkbox_name})
+            label.append(_get_navigation_expand_image(soup))
+            element.insert(1, label)
+
+            # Add the checkbox that's used to store expanded/collapsed state.
+            checkbox = soup.new_tag(
+                "input",
+                attrs={
+                    "type": "checkbox",
+                    "class": ["toctree-checkbox"],
+                    "id": checkbox_name,
+                    "name": checkbox_name,
+                },
+            )
+            # if this has a "current" class, be expanded by default (by checking the checkbox)
+            if "current" in classes:
+                checkbox.attrs["checked"] = ""
+
+            element.insert(1, checkbox)
+
+        if last_element_with_current is not None:
+            last_element_with_current["class"].append("current-page")
+
+        return soup.prettify()
+
+        # elif kind == "sidebar":
+        #     # Remove sidebar links to sub-headers on the page
+        #     for li in soup.select("li.current ul li"):
+        #         # Remove
+        #         if li.find("a"):
+        #             href = li.find("a")["href"]
+        #             if "#" in href and href != "#":
+        #                 li.decompose()
+
+        #     # Join all the top-level `li`s together for display
+        #     current_lis = soup.select("li.current.toctree-l1 li.toctree-l2")
+        #     out = "\n".join([ii.prettify() for ii in current_lis])
+
+        # elif kind == "raw":
+        #     out = soup
+
+        # return out
 
     def get_page_toc_object(kind="html"):
         """Return the within-page TOC links in HTML."""
