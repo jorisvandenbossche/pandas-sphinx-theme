@@ -36,6 +36,43 @@ function addTOCInteractivity() {
   });
 }
 
+
+// Sidebar scrolling
+function scrollToActive() {
+  var sidebar = document.getElementById('bd-docs-nav')
+  var active_pages = sidebar.querySelectorAll(".active")
+  var offset = 0
+  var i;
+  for (i = active_pages.length - 1; i > 0; i--) {
+    var active_page = active_pages[i]
+    if (active_page !== undefined) {
+      offset += active_page.offsetTop
+    }
+  }
+  offset -= sidebar.offsetTop
+
+  // Only scroll the navbar if the active link is lower than 50% of the page
+  if (active_page !== undefined && offset > (sidebar.clientHeight * .5)) {
+    sidebar.scrollTop = offset - (sidebar.clientHeight * .2)
+  }
+}
+
+
+// Helper function to run when the DOM is finished
+var sbRunWhenDOMLoaded = cb => {
+  if (document.readyState != 'loading') {
+    cb()
+  } else if (document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', cb)
+  } else {
+    document.attachEvent('onreadystatechange', function() {
+      if (document.readyState == 'complete') cb()
+    })
+  }
+}
+
 $(document).ready(() => {
   addTOCInteractivity();
 });
+
+sbRunWhenDOMLoaded(scrollToActive)

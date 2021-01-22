@@ -25,7 +25,7 @@ def _get_navigation_expand_image(soup):
 def add_toctree_functions(app, pagename, templatename, context, doctree):
     """Add functions so Jinja templates can add toctree objects."""
 
-    def get_nav_object(kind, **kwargs):
+    def get_nav_object(kind, start_depth=1, **kwargs):
         """Return the navigation link structure in HTML. Arguments are passed
         to Sphinx "toctree" function (context["toctree"] below).
 
@@ -60,11 +60,16 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
                 li.find("a")["class"].append("nav-link")
             return "\n".join([ii.prettify() for ii in soup.find_all("li")])
 
-        soup2 = soup.select("li.current.toctree-l1 ul")
-        if not soup2:
-            return ""
+        if start_depth > 0:
+            if start_depth == 1:
+                soup2 = soup.select("li.current.toctree-l1 ul")
+            elif start_depth == 2:
+                # breakpoint()
+                soup2 = soup.select("li.current.toctree-l1 ul li.current.toctree-l2 ul")
+            if not soup2:
+                return ""
 
-        soup = bs(str(soup2[0]), "html.parser")
+            soup = bs(str(soup2[0]), "html.parser")
 
         toctree_checkbox_count = 0
         last_element_with_current = None
@@ -110,6 +115,13 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
 
         if last_element_with_current is not None:
             last_element_with_current["class"].append("current-page")
+
+        # ul = soup.find("ul")
+        # ul["class"] = ul.get("class", []) + ["nav", "bd-sidenav"]
+
+        # Add bootstrap classes for first `ul` items
+        for ul in soup("ul", recursive=False):
+            ul.attrs["class"] = ul.attrs.get("class", []) + ["nav", "bd-sidenav"]
 
         return soup.prettify()
 
