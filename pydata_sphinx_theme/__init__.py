@@ -67,6 +67,27 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
         #         first_pages.append(path_first_page)
 
         # toctrees_first_page = app.env.tocs[first_page]
+
+        toc = TocTree(app.env)
+
+        indexname = ... # get name of the page that has the toctree, eg semo/index
+        index_toctree = app.env.tocs[indexname].deepcopy()
+        
+        toctrees = []
+        for toctreenode in index_toctree.traverse(addnodes.toctree):
+            toctree = toc.resolve(pagename, app.builder, toctreenode, prune=True, **kwargs)
+            if toctree:
+                toctrees.append(toctree)
+        if not toctrees:
+            return None
+        new_toctree = toctrees[0]
+        for toctree in toctrees[1:]:
+            new_toctree.extend(toctree.children)
+
+        toc_sphinx = app.builder.render_partial(new_toctree)["fragment"]
+        soup = bs(toc_sphinx, "html.parser")
+
+        
         
         if pagename =="demo/subpages/subpage1":
             breakpoint()
