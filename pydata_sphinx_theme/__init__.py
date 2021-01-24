@@ -11,6 +11,11 @@ from .bootstrap_html_translator import BootstrapHTML5Translator
 __version__ = "0.4.2dev0"
 
 
+from sphinx.environment.adapters.toctree import TocTree
+from sphinx import addnodes
+from docutils import nodes
+
+
 def add_toctree_functions(app, pagename, templatename, context, doctree):
     """Add functions so Jinja templates can add toctree objects."""
 
@@ -34,7 +39,67 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
         HTML string (if kind in ["navbar", "sidebar"])
         or BeautifulSoup object (if kind == "raw")
         """
-        toc_sphinx = context["toctree"](**kwargs)
+        if kind == "navbar":
+            toc_sphinx = context["toctree"](**kwargs)
+            soup = bs(toc_sphinx, "html.parser")
+
+            # pair "current" with "active" since that's what we use w/ bootstrap
+            for li in soup("li", {"class": "current"}):
+                li["class"].append("active")
+
+            # Add CSS for bootstrap
+            for li in soup("li"):
+                li["class"].append("nav-item")
+                li.find("a")["class"].append("nav-link")
+            return "\n".join([ii.prettify() for ii in soup.find_all("li")])
+
+        toc = TocTree(app.env)
+        # toctree = toc.get_toctree_for(pagename, app.builder, **kwargs)
+        
+        # if not pagename == "demo/index":
+        #     return ""
+        # breakpoint()
+
+        # toctrees_root = app.env.tocs[app.env.config['master_doc']]
+        # first_pages = []
+        # for toctree_root in toctrees_root.traverse(addnodes.toctree):
+        #     for _, path_first_page in toctree_root.attributes.get("entries", []):
+        #         first_pages.append(path_first_page)
+
+        # toctrees_first_page = app.env.tocs[first_page]
+        
+        if pagename =="demo/subpages/subpage1":
+            breakpoint()
+        ancestors = toc.get_toctree_ancestors(pagename)
+        # includes = app.env.toctree_includes
+        
+        if ancestors:
+            parent_name = ancestors[-1]
+            toctree2 = toc.get_local_toctree_for(parent_name, pagename, app.builder, **kwargs)
+            toc_sphinx = app.builder.render_partial(toctree2)["fragment"]
+            soup = bs(toc_sphinx, "html.parser")
+            # pair "current" with "active" since that's what we use w/ bootstrap
+            for li in soup("li", {"class": "current"}):
+                li["class"].append("active")
+
+            return soup.prettify()
+            
+        else:
+            toc_sphinx = context["toctree"](**kwargs)
+        # # Now find the toctrees for each first page and see if it has a caption
+        # caption_pages = []
+        # for first_page in first_pages:
+        #     toctrees_first_page = app.env.tocs[first_page]
+        #     for toctree_first_page in toctrees_first_page.traverse(addnodes.toctree):
+        #         # If the toctree has a caption, keep track of the first page
+        #         caption = toctree_first_page.attributes.get("caption")
+        #         if caption:
+        #             _, first_entry = toctree_first_page.attributes.get("entries", [])[0]
+        #             caption_pages.append((first_entry, caption))
+
+            
+
+        # toc_sphinx = context["toctree"](**kwargs)
         soup = bs(toc_sphinx, "html.parser")
 
         # pair "current" with "active" since that's what we use w/ bootstrap
@@ -58,8 +123,11 @@ def add_toctree_functions(app, pagename, templatename, context, doctree):
                         li.decompose()
 
             # Join all the top-level `li`s together for display
-            current_lis = soup.select("li.current.toctree-l1 li.toctree-l2")
-            out = "\n".join([ii.prettify() for ii in current_lis])
+            current_subset = soup.select("li.current.toctree-l1 ul")
+            if current_subset:
+                out = current_subset[0].prettify()
+            else:
+                out = ""
 
         elif kind == "raw":
             out = soup
